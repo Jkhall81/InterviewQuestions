@@ -1,0 +1,35 @@
+import solution.punch_logic as pl
+from pathlib import Path
+
+expected_results = {
+    "Mike": {
+        "employee": "Mike",
+        "regular": "39.2856",
+        "overtime": "0.0000",
+        "doubletime": "0.0000",
+        "wageTotal": "1056.4017",
+        "benefitTotal": "36.8320",
+    },
+    "Steve": {
+        "employee": "Steve",
+        "regular": "40.0000",
+        "overtime": "8.0000",
+        "doubletime": "1.1658",
+        "wageTotal": "1653.5979",
+        "benefitTotal": "49.9036",
+    },
+    "Alex": {
+        "employee": "Alex",
+        "regular": "40.0000",
+        "overtime": "3.6428",
+        "doubletime": "0.0000",
+        "wageTotal": "795.3979",
+        "benefitTotal": "44.5985",
+    },
+}
+
+def test_calculate_results():
+    file_path = Path(__file__).parent.parent.parent / "PunchLogicTest.jsonc"
+    data = pl.load_jsonc(file_path)
+    results = pl.calculate_results(data)
+    assert results == expected_results

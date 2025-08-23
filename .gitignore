@@ -1,0 +1,12 @@
+# Python venv
+venv/
+solution/venv/
+
+# Bytecode and cache
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE files
+.vscode/
+.idea/
