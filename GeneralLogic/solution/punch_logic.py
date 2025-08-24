@@ -5,20 +5,29 @@ from pathlib import Path
 
 
 def load_jsonc(filepath):
-    """Read jsonc, strip comments, and return a dictionary"""
+    """Read jsonc, strip comments, and return a dictionary."""
     with open(filepath, "r") as f:
         content = f.read()
+    # re.sub(pattern, replacement, string being worked on)
+    # need the r"" so we can use the escape '\'
     content = re.sub(r"/\*[\s\S]*?\*/|//.*", "", content)
     return json.loads(content)
 
 
 def calculate_results(data):
-    """Calculate payroll results from parsed JSON data."""
+    """Calculate payroll results from parsed JSON data, band-driven."""
     job_rates = {j["job"]: (j["rate"], j["benefitsRate"]) for j in data["jobMeta"]}
 
     def hours_diff(start, end):
         format = "%Y-%m-%d %H:%M:%S"
         return (datetime.strptime(end, format) - datetime.strptime(start, format)).total_seconds() / 3600
+
+    # Define pay bands as (label, cutoff_hours, multiplier)
+    PAY_BANDS = [
+        ("regular", 40, 1),
+        ("overtime", 48, 1.5),
+        ("doubletime", None, 2),
+    ]
 
     results = {}
 
@@ -26,47 +35,44 @@ def calculate_results(data):
         employee = emp["employee"]
         punches = emp["timePunch"]
 
+        # This and PAY_BANDS could be set up to be imported from JSON / a config file
+        # I think in this case hardcoding it in the code is fine
+        totals = {
+            "regular": 0,
+            "overtime": 0,
+            "doubletime": 0,
+            "wageTotal": 0,
+            "benefitTotal": 0,
+        }
         total_hours = 0
-        reg_hours = ot_hours = dt_hours = 0
-        wage_total = benefit_total = 0
 
         for punch in punches:
             job = punch["job"]
             rate, ben_rate = job_rates[job]
             hrs = hours_diff(punch["start"], punch["end"])
 
-            while hrs > 0:
-                if total_hours < 40:
-                    available = 40 - total_hours
-                    use = min(hrs, available)
-                    reg_hours += use
-                    wage_total += use * rate
-                    benefit_total += use * ben_rate
-                    hrs -= use
-                    total_hours += use
-                elif total_hours < 48:
-                    available = 48 - total_hours
-                    use = min(hrs, available)
-                    ot_hours += use
-                    wage_total += use * rate * 1.5
-                    benefit_total += use * ben_rate
-                    hrs -= use
-                    total_hours += use
-                else:
-                    dt_hours += hrs
-                    wage_total += hrs * rate * 2
-                    benefit_total += hrs * ben_rate
-                    total_hours += hrs
-                    hrs = 0
+            for label, cutoff, mult in PAY_BANDS:
+                if hrs <= 0:
+                    break
+                # if cutoff is None, no limit (all remaining hrs go here)
+                avail = hrs if cutoff is None else max(0, cutoff - total_hours)
+                used = min(hrs, avail)
+                if used > 0:
+                    totals[label] += used
+                    totals["wageTotal"] += used * rate * mult
+                    totals["benefitTotal"] += used * ben_rate
+                    hrs -= used
+                    total_hours += used
 
         results[employee] = {
             "employee": employee,
-            "regular": f"{reg_hours:.4f}",
-            "overtime": f"{ot_hours:.4f}",
-            "doubletime": f"{dt_hours:.4f}",
-            "wageTotal": f"{wage_total:.4f}",
-            "benefitTotal": f"{benefit_total:.4f}",
+            "regular": f"{totals['regular']:.4f}",
+            "overtime": f"{totals['overtime']:.4f}",
+            "doubletime": f"{totals['doubletime']:.4f}",
+            "wageTotal": f"{totals['wageTotal']:.4f}",
+            "benefitTotal": f"{totals['benefitTotal']:.4f}",
         }
+
     return results
 
 
@@ -76,6 +82,7 @@ if __name__ == "__main__":
     data = load_jsonc(file_path)
     results = calculate_results(data)
 
+    # without indent we get single line JSON, indent=2 gives us the pretty-printed version
     print(json.dumps(results, indent=2))
 
     out_file = Path(__file__).parent / "results.json"
